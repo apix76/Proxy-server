@@ -10,9 +10,12 @@ import (
 )
 
 type Route struct {
+	Method        string
+	PathAccess    string
 	PathRedirect  string
 	DominRedirect string
 	Scheme        string
+	PathFile      string
 }
 
 type ProxConf struct {
@@ -30,7 +33,11 @@ type Handler struct {
 
 func (r *Handler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	log.Println(req.Host + " " + req.URL.String() + " " + req.Method)
-	req.URL.Scheme = r.route.Scheme
+	if r.route.Scheme != "" {
+		req.URL.Scheme = r.route.Scheme
+	} else {
+		req.URL.Scheme = "https"
+	}
 	if r.route.DominRedirect != "" {
 		req.URL.Host = r.route.DominRedirect
 	}
@@ -120,10 +127,26 @@ func main() {
 	} else {
 		fmt.Println("Config is empty")
 	}
+
 }
 
 func (conf *ProxConf) SetUpHandles(mux *http.ServeMux) {
-	for prefix, route := range conf.RedirectMap {
-		mux.Handle(prefix, &Handler{route})
+	for host, route := range conf.RedirectMap {
+		var path string
+
+		if route.Method != "" {
+			path = route.Method + " " + host + "/" + route.PathAccess
+		} else {
+			path = host + "/" + route.PathRedirect
+		}
+
+		if route.PathFile != "" {
+			mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+				http.ServeFile(w, r, route.PathFile)
+			})
+		} else {
+
+			mux.Handle(path, &Handler{route})
+		}
 	}
 }
